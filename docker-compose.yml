@@ -1,0 +1,99 @@
+version: "3"
+
+networks:
+  erp:
+
+services:
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ${APP_PATH_HOST}:${APP_PATH_CONTAINER}
+    ports:
+      - ${PHP_PORT_HOST}:${PHP_PORT_CONTAINER}
+    container_name: php
+    networks:
+      - ${NETWORK_NAME}
+
+  db:
+    image: mysql:8.0.21
+    container_name: db
+    restart: unless-stopped
+    tty: true
+    ports:
+      - ${DB_PORT_HOST}:${DB_PORT_CONTAINER}
+    volumes:
+      - ${DB_PATH_HOST}:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - ${NETWORK_NAME}
+
+  adminer:
+    image: adminer:4.7.7-standalone
+    restart: always
+    ports:
+      - ${ADMINER_PORT_HOST}:${ADMINER_PORT_CONTAINER}
+    container_name: adminer
+    networks:
+      - ${NETWORK_NAME}
+
+  nginx:
+    image: nginx:stable-alpine
+    container_name: nginx
+    tty: true
+    ports:
+      - ${NGINX_PORT_HOST}:${NGINX_PORT_CONTAINER}
+    volumes:
+      - ${APP_PATH_HOST}:${APP_PATH_CONTAINER}
+      - ${NGINX_CONFIG_PATH_HOST}:${NGINX_CONFIG_PATH_CONTAINER}
+    working_dir: ${APP_PATH_CONTAINER}
+    depends_on:
+      - php
+      - db
+    networks:
+      - ${NETWORK_NAME}
+
+  composer:
+    image: composer:2.0
+    container_name: composer
+    working_dir: ${APP_PATH_CONTAINER}
+    entrypoint: ['composer']
+    command: require laravel/ui
+    depends_on:
+      - php
+    volumes:
+      - ${APP_PATH_HOST}:${APP_PATH_CONTAINER}
+    networks:
+      - ${NETWORK_NAME}
+
+  artisan:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: artisan
+    volumes:
+      - ${APP_PATH_HOST}:${APP_PATH_CONTAINER}
+    depends_on:
+      - db
+    working_dir: ${APP_PATH_CONTAINER}
+    entrypoint: ['/var/www/html/artisan']
+    networks:
+      - ${NETWORK_NAME}
+
+  npm:
+    image: node:14.7
+    container_name: npm
+    working_dir: ${APP_PATH_CONTAINER}
+    entrypoint: ['npm']
+    command: install
+    depends_on:
+      - artisan
+    volumes:
+      - ${APP_PATH_HOST}:${APP_PATH_CONTAINER}
+    networks:
+      - ${NETWORK_NAME}
